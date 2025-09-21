@@ -1,5 +1,7 @@
 # SP_Advanced-Secure-Protocol-Design-Implementation-and-Review
 This is a repository created for the Secure Programming assignments whereas students in the group needs to implement a Secure Protocol. 
+
+
 ## Introduction 
 - Our goal is to implement a simple lightweight secure chat protocol. This protocol will be WebSocket based. In this document it will discuss the protocol design and its structure. 
 
