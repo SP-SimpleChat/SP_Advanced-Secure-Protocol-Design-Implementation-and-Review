@@ -3,7 +3,7 @@ This is a repository created for the Secure Programming assignments whereas stud
 
 
 ## Introduction 
-- Our goal is to implement a simple lightweight secure chat protocol. This protocol will be WebSocket based. In this document it will discuss the protocol design and its structure. 
+- Our goal is to implement a simple lightweight secure chat protocol. This protocol will be WebSocket based or TCP based. In this document it will discuss the protocol design and its structure. 
 
 - Language used for Implementation: Python, JSON 
 
