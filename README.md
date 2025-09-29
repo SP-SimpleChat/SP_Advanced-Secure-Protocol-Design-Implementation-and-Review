@@ -25,3 +25,42 @@ This is a repository created for the Secure Programming assignments whereas stud
 - Perform peer reviews and engage in both manual and automated code analysis to identify vulnerabilities and backdoors.  
 - Critically reflect on the design and implementation process, including evaluating the protocol, the security measures implemented, the quality of the feedback received, a reflection on your own learning and possible coding mistakes.
 - Have fun at an ethical hackathon to identify and exploit vulnerabilities in a controlled setting, enhancing your understanding of real-world cybersecurity challenges.
+
+## 📂 Project Structure
+SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/
+├── client/
+│ └── client.py # 命令行客户端
+├── server/
+│ └── echo_server.py # 本地测试服务器
+├── requirements/ # 依赖目录
+├── src/ # 其他源码
+└── README.md
+
+
+
+---
+
+## 🚀 How to Run
+
+### 1. Create virtual environment (recommended)
+```bash
+python -m venv .venv
+# Windows
+.\.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
+2. Run the test server
+bash
+
+python server/echo_server.py
+3. Run the client
+bash
+
+python client/client.py --host 127.0.0.1 --port 9000 --nick hsk
+4. Available commands
+bash
+
+/join <room>     # join a chat room
+/msg <message>   # send message to the room
+/leave           # leave current room
+/quit            # disconnect
