@@ -84,16 +84,9 @@ def handle_join_vuln(req, conn):
     """
     VULNERABLE: Educational weak entry — directly adds a client to a room
     without any authorization checks.
-    req: request dict parsed from client (expected to contain 'room')
-    conn: client connection object
-    This function is intentionally insecure for peer review and
-    should NOT be used in production.
     """
     room = req.get("room", "lobby")
-    # Directly join the room without any permission or authentication check
     join_room(conn, room)
-
-    # Send confirmation and broadcast message tagged as (VULNERABLE)
     try:
         send_json(conn, {"type": "INFO", "text": f"{conn_to_nick.get(conn, 'unknown')} joined {room} (VULNERABLE)"})
     except Exception:
@@ -115,13 +108,10 @@ def is_authorized_to_join(nick, room, supplied_password=None):
     pw = room_passwords.get(room)
     if pw is not None:
         return supplied_password == pw
-    # Default allow (for classroom example); can be changed to False to enforce auth
-    return True
+    return True  # default allow for classroom demo
 
 def handle_join_secure(req, conn):
-    """
-    SAFE: Example of secure join handler with simple ACL/password verification.
-    """
+    """SAFE: Example of secure join handler with simple ACL/password verification."""
     room = req.get("room", "lobby")
     supplied_pw = req.get("password")
     if room not in rooms:
@@ -172,7 +162,6 @@ def handle(conn, addr):
                             pass
                         conn.close()
                         return
-
                     nick_to_conn[nick] = conn
                     conn_to_nick[conn] = nick
 
@@ -185,10 +174,21 @@ def handle(conn, addr):
                 if not nick:
                     send_json(conn, {"type": "ERROR", "text": "Say HELLO first to register your nick"})
                     continue
-
                 # VULNERABLE entry: intentionally calls the weak join handler (no authorization)
                 handle_join_vuln(req, conn)
                 continue
+
+            # ---- NEW: WHO (online members) ----
+            if t == "WHO":
+                # prefer explicit room from request; fallback to last joined room
+                r = (req.get("room") or room)
+                if not r or conn not in rooms.get(r, set()):
+                    send_json(conn, {"type": "ERROR", "text": "You are not in any room"})
+                    continue
+                members = [conn_to_nick.get(c, "?") for c in rooms.get(r, set())]
+                send_json(conn, {"type": "WHO_LIST", "room": r, "members": members})
+                continue
+            # -----------------------------------
 
             if t == "MSG":
                 nick = conn_to_nick.get(conn)
