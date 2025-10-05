@@ -3,12 +3,9 @@ This is a repository created for the Secure Programming assignments whereas stud
 
 
 ## Introduction 
-- Our goal is to implement a simple lightweight secure chat protocol. This protocol will be [WebSocket based or TCP based]. In this document it will discuss the protocol design and its structure. 
+- Our goal is to implement a simple lightweight secure chat protocol. In this document it will discuss how this protocol works and commands. 
 
 - Language used for Implementation: Python, JSON 
-
-## Everything in a nutshell: 
-- Basically, we are making a [WebSocket based or TCP based] in python that allows many clients to connect on one server. Later we need to make sure all the text, files, picture or user password are secured. 
 
 
 ## Group Memebers [in alphabetical order] 
@@ -26,6 +23,7 @@ This is a repository created for the Secure Programming assignments whereas stud
 - Critically reflect on the design and implementation process, including evaluating the protocol, the security measures implemented, the quality of the feedback received, a reflection on your own learning and possible coding mistakes.
 - Have fun at an ethical hackathon to identify and exploit vulnerabilities in a controlled setting, enhancing your understanding of real-world cybersecurity challenges.
 
+
 ## 📂 Project Structure
 SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/
 ├── client/
@@ -33,10 +31,14 @@ SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/
 ├── server/
 │ └── echo_server.py # 本地测试服务器
 ├── requirements/ # 依赖目录
-├── src/ # 其他源码
+├── src/ 
+|  └── file_transfer.py 
+|  └── connection 
+|    └── __init__.py
+|    └── heartbeat.py
+|    └── manager.py
+|    └── protocol.py
 └── README.md
-
-
 
 ---
 
@@ -49,18 +51,23 @@ python -m venv .venv
 .\.venv\Scripts\activate
 # macOS/Linux
 source .venv/bin/activate
+
 2. Run the test server
 bash
 
 python server/echo_server.py
+
 3. Run the client
 bash
 
 python client/client.py --host 127.0.0.1 --port 9000 --nick hsk
+
 4. Available commands
 bash
 
-/join <room>     # join a chat room
-/msg <message>   # send message to the room
-/leave           # leave current room
-/quit            # disconnect
+/join <room>         # join a chat room
+/msg <message>       # send message to the room
+/send <path>         # sending a file 
+/leave               # leave current room
+/quit                # disconnect
+
