@@ -27,10 +27,10 @@ This is a repository created for the Secure Programming assignments whereas stud
 ## 📂 Project Structure
 SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/<br>
 ├── client/<br>
-│ └── client.py # 命令行客户端<br>
+│ └── client.py  <br>
 ├── server/<br>
-│ └── echo_server.py # 本地测试服务器<br>
-├── requirements/ # 依赖目录<br>
+│ └── echo_server.py <br>
+├── requirements/ <br>
 ├── src/ <br>
 │ └── file_transfer.py <br>
 │ └── connection/ <br>
