@@ -41,6 +41,12 @@ SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/<br>
 └── README.md
 
 ---
+### Deliberate Educational Vulnerability
+
+For the Secure Programming peer review task, this project intentionally includes
+a controlled vulnerability in `server/echo_server.py` (missing room authorization).  
+Please review and test it **only in a safe local environment**, as described in the assignment instructions.
+
 
 ## 🚀 How to Run
 
@@ -72,3 +78,8 @@ bash
 /leave                   # leave current room
 /quit                    # disconnect
 
+### Deliberate Educational Vulnerability
+
+For the Secure Programming peer review task, this project intentionally includes
+a controlled vulnerability in `server/echo_server.py` (missing room authorization).  
+Please review and test it **only in a safe local environment**, as described in the assignment instructions.
