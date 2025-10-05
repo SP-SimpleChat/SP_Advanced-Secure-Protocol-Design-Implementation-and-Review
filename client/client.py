@@ -5,8 +5,17 @@ import threading
 import time
 from datetime import datetime
 import argparse
+import sys, os 
+import shlex
+from tqdm import tqdm  # pip install pycryptodome tqdm
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+from src.connection.manager import ConnectionManager
+from src.file_transfer import start_send, next_chunk, finish_send, ingest_start, ingest_chunk, ingest_end
 
-# --- 编解码函数 ---
+
+# --- 编解码函数 / Encoding and decoding functions ---
 def send_json(sock: socket.socket, obj: dict):
     data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     header = struct.pack(">I", len(data))
@@ -28,7 +37,7 @@ def recv_json(sock: socket.socket) -> dict:
     return json.loads(body.decode("utf-8"))
 
 
-# --- 客户端类 ---
+# --- 客户端类 / Client type ---
 class ChatClient:
     def __init__(self, host, port, nickname, heartbeat_interval=20):
         self.host = host
@@ -44,7 +53,7 @@ class ChatClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
         self.running = True
-        # 登录
+        # 登录 / Greetings 
         send_json(self.sock, {"type": "HELLO", "nick": self.nick})
         print(f"[info] connected to {self.host}:{self.port} as '{self.nick}'")
 
@@ -55,7 +64,7 @@ class ChatClient:
         except Exception:
             pass
 
-    # 接收线程
+    # 接收线程 / Receiving thread
     def receiver_loop(self):
         try:
             while self.running:
@@ -73,6 +82,29 @@ class ChatClient:
                     print(f"[error] {msg.get('code','')} {msg.get('text','')}")
                 elif mtype == "PONG":
                     self.last_pong = time.time()
+                #--- this is for the file transfer -- 
+                elif mtype == "FILE_START":
+                    total = ingest_start(msg, "./downloads")
+                    self._recv_pbar = tqdm(total=total, unit="B", unit_scale=True, desc="receiving")
+                    print("[info] Ready to receive file")
+                elif mtype == "FILE_CHUNK":
+                    try:
+                        n = ingest_chunk(msg)
+                        if hasattr(self, "_recv_pbar") and self._recv_pbar:
+                            self._recv_pbar.update(n)
+                    except Exception as e:
+                        print(f"[error] file chunk error: {e}")
+                elif mtype == "FILE_END":
+                    try:
+                        path = ingest_end(msg)
+                        if hasattr(self, "_recv_pbar") and self._recv_pbar:
+                            self._recv_pbar.close()
+                            self._recv_pbar = None
+                        print(f"[info] file saved to {path}")
+                    except Exception as e:
+                        print(f"[error] file finalize error: {e}")
+
+                #----------------------------------
                 else:
                     print(f"[debug] {msg}")
         except Exception as e:
@@ -80,7 +112,7 @@ class ChatClient:
                 print(f"[warn] connection lost: {e}")
             self.running = False
 
-    # 心跳线程
+    # 心跳线程 / PING PONG Command 
     def heartbeat_loop(self):
         try:
             while self.running:
@@ -98,7 +130,7 @@ class ChatClient:
         except Exception:
             pass
 
-    # 命令处理
+    # 命令处理/ Cpmmands 
     def handle_command(self, line: str):
         if line.startswith("/join "):
             room = line.split(" ", 1)[1].strip()
@@ -107,7 +139,7 @@ class ChatClient:
         elif line.startswith("/msg "):
             text = line.split(" ", 1)[1]
             if not self.room:
-                print("[error] 请先 /join <room>")
+                print("[error] Please enter a room using:  /join <room>") # print("[error] 请先 /join <room>")
                 return
             send_json(self.sock, {"type": "MSG", "room": self.room, "text": text})
         elif line.strip() == "/leave":
@@ -117,8 +149,48 @@ class ChatClient:
             send_json(self.sock, {"type": "QUIT"})
             self.close()
             print("Bye!")
+        # ---- This is for the file Transfer --- 
+        elif line.startswith("/send"):
+            try:
+                args = shlex.split(line)
+                if len(args) < 2:
+                    print("[error] usage: /send <path> | /send dm:<nick> <path>")
+                    return
+                if len(args) >= 3 and args[1].startswith("dm:"):
+                    to = args[1][3:]; mode = "dm"; path = args[2]
+                else:
+                    if not self.room:
+                        print("[error] Please use /join to join a room or use dm:<nick>")
+                        return
+                    to = self.room; mode = "public"; path = args[1]
+                fid = start_send(
+                    path=path,
+                    to=to,
+                    mode=mode,
+                    send_json=lambda obj: send_json(self.sock, obj),
+                    from_user = self.nick,
+                    session_key=None  
+                )
+                # this is where the tqdm is use for the progress bar 
+                sent = 0 
+                pbar = tqdm(total=os.path.getsize(path), unit="B", unit_scale=True, desc="sending")
+                while True:
+                    nxt = next_chunk(fid)
+                    if nxt is None:
+                        break
+                    chunk_msg, nbytes = nxt
+                    send_json(self.sock, chunk_msg)
+                    sent += nbytes
+                    pbar.update(nbytes)
+                pbar.close()
+                send_json(self.sock, finish_send(fid))
+                print("[info] file transfer finished (sent)")
+            
+            except Exception as e:
+                print(f"[error] File sending failed: {e}")
+        #----------------------------------------------------------------
         else:
-            print("可用命令：/join <room> | /msg <text> | /leave | /quit")
+            print("Available commands: /join <room> | /msg <text> | /leave | /quit") # print("可用命令：/join <room> | /msg <text> | /leave | /quit")  
 
     def run(self):
         try:
@@ -139,12 +211,12 @@ class ChatClient:
             self.close()
 
 
-# --- 启动入口 ---
+# --- 启动入口 / Startup ---
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SimpleChat Client")
-    parser.add_argument("--host", default="127.0.0.1", help="服务器地址")
-    parser.add_argument("--port", type=int, default=9000, help="服务器端口")
-    parser.add_argument("--nick", default="hsk", help="客户端昵称")
+    parser.add_argument("--host", default="127.0.0.1", help="Server Ip address") # it was in Chinese 服务器地址 I will change it to english
+    parser.add_argument("--port", type=int, default=9000, help="Server Port")    # 服务器端口 --> Server Port 
+    parser.add_argument("--nick", default="hsk", help="Client name")     # 客户端昵称 --> Client name/User name 
     args = parser.parse_args()
 
     client = ChatClient(args.host, args.port, args.nick)
