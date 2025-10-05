@@ -65,9 +65,10 @@ python client/client.py --host 127.0.0.1 --port 9000 --nick hsk
 4. Available commands
 bash
 
-/join <room>         # join a chat room
-/msg <message>       # send message to the room
-/send <path>         # sending a file 
-/leave               # leave current room
-/quit                # disconnect
+/join <room>             # join a chat room
+/msg <message>           # send message to the room
+/send <path>             # sending a file
+/send dm:<nick> <path>   # sending file via dm 
+/leave                   # leave current room
+/quit                    # disconnect
 
