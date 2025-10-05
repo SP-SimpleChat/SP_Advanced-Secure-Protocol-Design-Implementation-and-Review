@@ -145,6 +145,27 @@ def handle(conn, addr):
                 send_json(conn, {"type": "INFO", "text": "Goodbye!"})
                 break
 
+            # -- This is for the file transfer 
+            if t in {"FILE_START", "FILE_CHUNK", "FILE_END"}:
+                pl = req.get("payload", {})
+                fid = pl.get("file_id")
+                if not isinstance(fid, str) or len(fid) < 8:
+                    send_json(conn, {"type": "ERROR", "text": "BAD_FILE_ID"}); continue
+                
+                to = (req.get("to") or "").strip().lower()
+                nick = conn_to_nick.get(conn)
+
+                # For DM 
+                if to in nick_to_conn:
+                    send_json(nick_to_conn[to], req)
+                    continue
+
+                #For public 
+                if to and conn in rooms.get(to, set()):
+                    broadcast(to, req, exclude=conn)
+                    continue
+            #-----------------------------------
+
             send_json(conn, {"type": "ERROR", "text": f"Unknown type: {t}"})
 
     except Exception:
