@@ -25,19 +25,19 @@ This is a repository created for the Secure Programming assignments whereas stud
 
 
 ## 📂 Project Structure
-SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/
-├── client/
-│ └── client.py # 命令行客户端
-├── server/
-│ └── echo_server.py # 本地测试服务器
-├── requirements/ # 依赖目录
-├── src/ 
-|  └── file_transfer.py 
-|  └── connection 
-|    └── __init__.py
-|    └── heartbeat.py
-|    └── manager.py
-|    └── protocol.py
+SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/<br>
+├── client/<br>
+│ └── client.py # 命令行客户端<br>
+├── server/<br>
+│ └── echo_server.py # 本地测试服务器<br>
+├── requirements/ # 依赖目录<br>
+├── src/ <br>
+|  └── file_transfer.py <br>
+|  └── connection <br>
+|    └── __init__.py<br>
+|    └── heartbeat.py<br>
+|    └── manager.py<br>
+|    └── protocol.py<br>
 └── README.md
 
 ---
