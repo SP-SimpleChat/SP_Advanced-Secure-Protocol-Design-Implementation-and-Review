@@ -1,9 +1,29 @@
 import socket, struct, json, threading
 
+# -------------------------------------------------------------------------
+# NOTE (Deliberate Vulnerability - For Coursework Peer Review)
+#
+# This file intentionally contains an educational vulnerability
+# (Room Authorization Missing) for peer review in the Secure Programming course.
+#
+# Location: The handler for JOIN requests has been replaced by
+# handle_join_vuln(...), which allows clients to join any room without
+# performing ACL/password/session authorization checks.
+#
+# Purpose: To help peer reviewers identify and report this logic flaw
+# through code inspection or controlled testing
+# (see VULN_REPORT_TEMPLATE.md in the repository root).
+#
+# Security Warning:
+# This vulnerability is for classroom demonstration only.
+# Do NOT perform any unauthorized scans or attacks outside
+# a controlled local or lab environment.
+# -------------------------------------------------------------------------
+
 nick_to_conn = {}
 conn_to_nick = {}
 rooms = {}
-lock = threading.Lock()  
+lock = threading.Lock()
 
 def send_json(sock, obj):
     data = json.dumps(obj).encode()
@@ -26,7 +46,7 @@ def recv_json(sock):
     return json.loads(recv_exact(sock, l).decode())
 
 def join_room(conn, room):
-    """Connect the connection to the room (if already in another room, move it there first)"""
+    """Move the connection to the specified room (remove from previous if any)."""
     for r, members in list(rooms.items()):
         if conn in members:
             members.remove(conn)
@@ -35,7 +55,7 @@ def join_room(conn, room):
     rooms.setdefault(room, set()).add(conn)
 
 def broadcast(room, payload, exclude=None):
-    """Broadcast to all members in the room"""
+    """Send a message to all members in the given room."""
     for c in list(rooms.get(room, [])):
         if c is exclude:
             continue
@@ -45,7 +65,7 @@ def broadcast(room, payload, exclude=None):
             rooms[room].discard(c)
 
 def cleanup(conn):
-    """Clean up the mappings and rooms when the connection is disconnected."""
+    """Clean up mappings and rooms when the connection is closed."""
     for r, members in list(rooms.items()):
         if conn in members:
             members.remove(conn)
@@ -56,6 +76,73 @@ def cleanup(conn):
         del nick_to_conn[nick]
     try:
         conn.close()
+    except Exception:
+        pass
+
+# === Deliberate Weak Implementation (VULNERABLE: Room Authorization Missing) ===
+def handle_join_vuln(req, conn):
+    """
+    VULNERABLE: Educational weak entry — directly adds a client to a room
+    without any authorization checks.
+    req: request dict parsed from client (expected to contain 'room')
+    conn: client connection object
+    This function is intentionally insecure for peer review and
+    should NOT be used in production.
+    """
+    room = req.get("room", "lobby")
+    # Directly join the room without any permission or authentication check
+    join_room(conn, room)
+
+    # Send confirmation and broadcast message tagged as (VULNERABLE)
+    try:
+        send_json(conn, {"type": "INFO", "text": f"{conn_to_nick.get(conn, 'unknown')} joined {room} (VULNERABLE)"})
+    except Exception:
+        pass
+    try:
+        broadcast(room, {"type": "MSG", "room": room, "nick": "server",
+                         "text": f"{conn_to_nick.get(conn, 'unknown')} joined the room (VULNERABLE)"}, exclude=conn)
+    except Exception:
+        pass
+
+# === Secure Fix Example (SAFE) ===
+room_passwords = {}  # e.g., {'room1': 'pw123'}
+room_acl = {}        # e.g., {'room1': {'alice', 'bob'}}
+
+def is_authorized_to_join(nick, room, supplied_password=None):
+    acl = room_acl.get(room)
+    if acl is not None:
+        return nick in acl
+    pw = room_passwords.get(room)
+    if pw is not None:
+        return supplied_password == pw
+    # Default allow (for classroom example); can be changed to False to enforce auth
+    return True
+
+def handle_join_secure(req, conn):
+    """
+    SAFE: Example of secure join handler with simple ACL/password verification.
+    """
+    room = req.get("room", "lobby")
+    supplied_pw = req.get("password")
+    if room not in rooms:
+        rooms[room] = set()
+
+    nick = conn_to_nick.get(conn)
+    if not is_authorized_to_join(nick, room, supplied_pw):
+        try:
+            send_json(conn, {"type": "ERROR", "text": "not authorized to join room"})
+        except Exception:
+            pass
+        return
+
+    join_room(conn, room)
+    try:
+        send_json(conn, {"type": "INFO", "text": f"{nick} joined {room} (SECURE)"})
+    except Exception:
+        pass
+    try:
+        broadcast(room, {"type": "MSG", "room": room, "nick": "server",
+                         "text": f"{nick} joined the room (SECURE)"}, exclude=conn)
     except Exception:
         pass
 
@@ -84,7 +171,7 @@ def handle(conn, addr):
                         except Exception:
                             pass
                         conn.close()
-                        return  
+                        return
 
                     nick_to_conn[nick] = conn
                     conn_to_nick[conn] = nick
@@ -98,10 +185,9 @@ def handle(conn, addr):
                 if not nick:
                     send_json(conn, {"type": "ERROR", "text": "Say HELLO first to register your nick"})
                     continue
-                join_room(conn, room)
-                send_json(conn, {"type": "INFO", "text": f"{nick} joined {room}"})
-                broadcast(room, {"type": "MSG", "room": room, "nick": "server",
-                                 "text": f"{nick} joined the room"}, exclude=conn)
+
+                # VULNERABLE entry: intentionally calls the weak join handler (no authorization)
+                handle_join_vuln(req, conn)
                 continue
 
             if t == "MSG":
@@ -145,26 +231,26 @@ def handle(conn, addr):
                 send_json(conn, {"type": "INFO", "text": "Goodbye!"})
                 break
 
-            # -- This is for the file transfer 
+            # -- File transfer handlers --
             if t in {"FILE_START", "FILE_CHUNK", "FILE_END"}:
                 pl = req.get("payload", {})
                 fid = pl.get("file_id")
                 if not isinstance(fid, str) or len(fid) < 8:
                     send_json(conn, {"type": "ERROR", "text": "BAD_FILE_ID"}); continue
-                
+
                 to = (req.get("to") or "").strip().lower()
                 nick = conn_to_nick.get(conn)
 
-                # For DM 
+                # Direct message
                 if to in nick_to_conn:
                     send_json(nick_to_conn[to], req)
                     continue
 
-                #For public 
+                # Public room transfer
                 if to and conn in rooms.get(to, set()):
                     broadcast(to, req, exclude=conn)
                     continue
-            #-----------------------------------
+            # -----------------------------------
 
             send_json(conn, {"type": "ERROR", "text": f"Unknown type: {t}"})
 
