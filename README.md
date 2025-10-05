@@ -33,11 +33,11 @@ SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/<br>
 ├── requirements/ # 依赖目录<br>
 ├── src/ <br>
 │ └── file_transfer.py <br>
-│  └── connection <br>
-│     └── __init__.py<br>
-│     └── heartbeat.py<br>
-│     └── manager.py<br>
-│     └── protocol.py<br>
+│ └── connection/ <br>
+│     └──── __init__.py<br>
+│     └──── heartbeat.py<br>
+│     └──── manager.py<br>
+│     └──── protocol.py<br>
 └── README.md
 
 ---
