@@ -32,12 +32,12 @@ SP_Advanced-Secure-Protocol-Design-Implementation-and-Review/<br>
 │ └── echo_server.py # 本地测试服务器<br>
 ├── requirements/ # 依赖目录<br>
 ├── src/ <br>
-|  └── file_transfer.py <br>
-|  └── connection <br>
-|    └── __init__.py<br>
-|    └── heartbeat.py<br>
-|    └── manager.py<br>
-|    └── protocol.py<br>
+│ └── file_transfer.py <br>
+│  └── connection <br>
+│   └── __init__.py<br>
+│   └── heartbeat.py<br>
+│   └── manager.py<br>
+│   └── protocol.py<br>
 └── README.md
 
 ---
