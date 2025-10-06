@@ -42,11 +42,21 @@ class ChatClient:
         self.host = host
         self.port = port
         self.nick = nickname
+        # -- This is for preventing auto download of file 
+        self.auto_accept = False 
+        self.download_dir = "./downloads"
+        os.makedirs(self.download_dir, exist_ok=True)
+        self.__pending_files = {} 
+        self.__chunk_buf = {} 
+        self.__end_msg_buf = {}  
+        self._active_files = set()
+        self._recv_pbar = None
         self.sock = None
         self.running = False
         self.room = None
         self.last_pong = time.time()
         self.heartbeat_interval = heartbeat_interval
+
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -89,28 +99,47 @@ class ChatClient:
 
                 # --- File transfer receive path ---
                 elif mtype == "FILE_START":
-                    total = ingest_start(msg, "./downloads")
-                    self._recv_pbar = tqdm(total=total, unit="B", unit_scale=True, desc="receiving")
-                    print("[info] Ready to receive file")
+                    fid = msg.get("payload", {}).get("file_id")
+                    if not fid:
+                        print("[warn] FILE_START without file_id - ignored")
+                        continue
+                    total = int(msg.get("payload", {}).get("size", 0) or 0)
+                    if self.auto_accept:
+                        os.makedirs(self.download_dir, exist_ok=True)
+                        total = ingest_start(msg, self.download_dir )
+                        self._active_files.add(fid)
+                        if self._recv_pbar: self._recv_pbar.close(); self._recv_pbar = None
+                        self._recv_pbar = tqdm(total=total, unit="B", unit_scale=True, desc="receiving")
+                        print(f"[info] Ready to receive file (auto-accepted) id={fid}")
+                    else:
+                        self.__pending_files[fid] = msg
+                        print(f"[info] Incoming file id={fid}, size={total}B. Use /accept {fid} or /reject {fid}")
                 elif mtype == "FILE_CHUNK":
-                    try:
+                    fid = msg.get("payload", {}).get("file_id")
+                    if fid in self._active_files: #this will ignore the chunks as unaccepted transfer 
                         n = ingest_chunk(msg)
-                        if hasattr(self, "_recv_pbar") and self._recv_pbar:
-                            self._recv_pbar.update(n)
-                    except Exception as e:
-                        print(f"[error] file chunk error: {e}")
+                    if fid in self._active_files:
+                        n = ingest_chunk(msg)
+                        if self._recv_pbar:self._recv_pbar.update(n)
+                    elif fid in self.__pending_files:
+                        self.__chunk_buf.setdefault(fid, []).append(msg)
                 elif mtype == "FILE_END":
-                    try:
-                        path = ingest_end(msg)
-                        if hasattr(self, "_recv_pbar") and self._recv_pbar:
-                            self._recv_pbar.close()
-                            self._recv_pbar = None
-                        print(f"[info] file saved to {path}")
-                    except Exception as e:
-                        print(f"[error] file finalize error: {e}")
-                else:
-                    print(f"[debug] {msg}")
+                    fid = msg.get("payload", {}).get("file_id")
+                    if fid not in self._active_files:
+                        if fid in self.__pending_files:
+                            self.__end_msg_buf[fid] = msg 
+                        continue
+                    path = ingest_end(msg)
+
+                    if self._recv_pbar:
+                        self._recv_pbar.close(); self._recv_pbar = None
+                    self._active_files.discard(fid)
+                    self.__pending_files.pop(fid, None)
+                    print(f"[info] file saved to {path}")
         except Exception as e:
+            if getattr(self, "_recv_pbar", None):
+                self._recv_pbar.close()
+                self._recv_pbar = None
             if self.running:
                 print(f"[warn] connection lost: {e}")
             self.running = False
@@ -177,6 +206,7 @@ class ChatClient:
                 )
                 sent = 0
                 pbar = tqdm(total=os.path.getsize(path), unit="B", unit_scale=True, desc="sending")
+                time.sleep(getattr(self, "send_wait", 2.0)) 
                 while True:
                     nxt = next_chunk(fid)
                     if nxt is None:
@@ -187,11 +217,46 @@ class ChatClient:
                     pbar.update(nbytes)
                 pbar.close()
                 send_json(self.sock, finish_send(fid))
-                print("[info] file transfer finished (sent)")
+                print(f"[info] file transfer finished (sent {sent} bytes)")
             except Exception as e:
                 print(f"[error] File sending failed: {e}")
+
+        # ----- NEW update for the /accept command because auto save a file was not a good idea 
+        elif line.startswith("/accept"):
+            fid = line[7:].strip()
+            msg = self.__pending_files.pop(fid, None)
+            if not msg:
+                print("[error] Unknown file_id"); return
+            if int(msg.get("payload", {}).get("size", 0)) > 25 * 1024 * 1024 : #25MB 
+                print("[warn] Too large, reject or start with --auto-accept to override"); return 
+            os.makedirs(self.download_dir, exist_ok=True)  
+            total = ingest_start(msg, self.download_dir)
+            self._active_files.add(fid)
+            self._recv_pbar = tqdm(total=total, unit="B", unit_scale=True, desc="receiving")
+            
+            for ch in self.__chunk_buf.pop(fid, []):
+                n = ingest_chunk(ch)
+                if self._recv_pbar: self._recv_pbar.update(n)
+            
+            end_msg = self.__end_msg_buf.pop(fid, None)
+
+             # if END already arrived, finalize now
+            if end_msg:
+                path = ingest_end(end_msg)
+                if self._recv_pbar:
+                    self._recv_pbar.close(); self._recv_pbar = None
+                self._active_files.discard(fid)
+                print(f"[info] file saved to {path}")
+                return
+
+            print(f"[info] Accepted file {fid}")
+        
+        elif line.startswith("/reject"):
+            fid = line[7:].strip()
+            self.__pending_files.pop(fid, None)
+            print(f"[info] Rejected file {fid}")
         else:
-            print("Available: /join <room> | /who | /msg <text> | /send <path> | /send dm:<nick> <path> | /leave | /quit")
+            print("Available: /join <room> | /who | /msg <text> | /send <path> | /accept <file_id> | /reject <file_id> | /leave | /quit")
 
     def run(self):
         try:
@@ -216,7 +281,11 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1", help="Server IP address")
     parser.add_argument("--port", type=int, default=9000, help="Server port")
     parser.add_argument("--nick", default="hsk", help="Client nickname")
+    parser.add_argument("--auto-accept", action="store_true", help="Auto-accept incoming files (unsafe; off by default)")
+    parser.add_argument("--send-wait", type=float, default=2.0, help="Seconds to wait after FILE_START before sending chunks")
     args = parser.parse_args()
 
     client = ChatClient(args.host, args.port, args.nick)
+    client.auto_accept = args.auto_accept 
+    client.send_wait = args.send_wait 
     client.run()
