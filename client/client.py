@@ -191,7 +191,7 @@ class ChatClient:
             except Exception as e:
                 print(f"[error] File sending failed: {e}")
         else:
-            print("Available: /join <room> | /who | /msg <text> | /leave | /quit")
+            print("Available: /join <room> | /who | /msg <text> | /send <path> | /send dm:<nick> <path> | /leave | /quit")
 
     def run(self):
         try:
